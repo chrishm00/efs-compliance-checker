@@ -1,0 +1,108 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation template for setting up AWS Config rule with Lambda function to check EFS mount options.
+
+
+Parameters:
+ BucketName:
+   Description: Name of the S3 bucket where results will be saved.
+   Type: String
+ CodeBucket:
+   Description: Name of the S3 bucket where the Lambda code is stored.
+   Type: String
+ CodeKey:
+   Description: S3 object key (path) for the Lambda code zip file.
+   Type: String
+
+
+Resources:
+ LambdaExecutionRole:
+   Type: 'AWS::IAM::Role'
+   Properties:
+     AssumeRolePolicyDocument:
+       Version: '2012-10-17'
+       Statement:
+         - Effect: Allow
+           Principal:
+             Service:
+               - lambda.amazonaws.com
+               - config.amazonaws.com
+           Action: sts:AssumeRole
+     Policies:
+       - PolicyName: !Sub "${AWS::StackName}-LambdaExecutionPolicy"
+         PolicyDocument:
+           Version: '2012-10-17'
+           Statement:
+             - Effect: Allow
+               Action:
+                 - logs:CreateLogGroup
+                 - logs:CreateLogStream
+                 - logs:PutLogEvents
+               Resource: 'arn:aws:logs:*:*:*'
+             - Effect: Allow
+               Action:
+                 - ec2:DescribeInstances
+               Resource: '*'
+             - Effect: Allow
+               Action:
+                 - ssm:SendCommand
+                 - ssm:GetCommandInvocation
+                 - ssm:ListCommandInvocations
+                 - ssm:DescribeInstanceInformation
+               Resource: '*'
+             - Effect: Allow
+               Action:
+                 - config:PutEvaluations
+               Resource: '*'
+             - Effect: Allow
+               Action:
+                 - s3:PutObject
+               Resource: !Sub 'arn:aws:s3:::${BucketName}/*'
+ LambdaInvokePermission:
+   Type: AWS::Lambda::Permission
+   Properties:
+     Action: lambda:InvokeFunction
+     FunctionName: !GetAtt LambdaFunction.Arn
+     Principal: config.amazonaws.com
+
+
+ LambdaFunction:
+   Type: 'AWS::Lambda::Function'
+   Properties:
+     FunctionName: !Sub "${AWS::StackName}-LambdaFunction"
+     Handler: lambda_function.lambda_handler
+     Role: !GetAtt LambdaExecutionRole.Arn
+     Runtime: python3.9
+     MemorySize: 256
+     Timeout: 30 # can be modify "increase" depending on the num of instances to analyze
+     Environment:
+       Variables:
+         BUCKET_NAME: !Ref BucketName
+     Code:
+       S3Bucket: !Ref CodeBucket
+       S3Key: !Ref CodeKey
+
+
+ ConfigRule:
+   Type: 'AWS::Config::ConfigRule'
+   Properties:
+     ConfigRuleName: !Sub "${AWS::StackName}-CheckEFSMountOptions"
+     Description: Checks EFS mount options on EC2 instances.
+     InputParameters: {}
+     MaximumExecutionFrequency: TwentyFour_Hours
+     Scope:
+       ComplianceResourceTypes:
+         - 'AWS::EC2::Instance'
+     Source:
+       Owner: CUSTOM_LAMBDA
+       SourceIdentifier: !GetAtt LambdaFunction.Arn
+       SourceDetails:
+         - EventSource: aws.config
+           MessageType: ConfigurationItemChangeNotification
+
+
+Outputs:
+ LambdaFunctionName:
+   Description: Name of the Lambda function.
+   Value: !Ref LambdaFunction
+   Export:
+     Name: !Sub "${AWS::StackName}-LambdaFunctionName"
