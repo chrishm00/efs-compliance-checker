@@ -1,6 +1,8 @@
 
 Designed to help customers
 
+For full setup instructions and pre-requisites/configuration, please refer to the [Medium article](https://medium.com/@christopherhm0028/automated-efs-noresvport-compliance-checks-736ddb394592)
+
 ```markdown
 # Automated AWS EFS Compliance Checker
 
@@ -43,7 +45,6 @@ This project provides an automated solution to ensure that your EC2 instances us
 - **CloudFormation Template**: `efs-cloudformation-template.yaml`
 - **Lambda Function**: `lambda_function.py`
 
-For full setup instructions and details, please refer to the [Medium article](https://medium.com/your-article-link).
 
 ## License
 
